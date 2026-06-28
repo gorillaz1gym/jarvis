@@ -7,9 +7,7 @@ from voice.wake_word import wait_for_wake_word
 from core.brain import Brain
 import control.windows as windows
 
-from vision.screen import take_screenshot
-from vision.vision_ai import analyze_screen
-from control.vision_executor import execute_vision_plan
+from vision.vision_executor import execute_vision_plan
 
 
 # =====================
@@ -25,10 +23,10 @@ print("🚀 SYSTEM READY")
 
 
 # =====================
-# 🧠 ROUTER
+# ROUTER
 # =====================
-def route(text: str):
 
+def route(text: str):
     prompt = f"""
 Ты AI-роутер Jarvis.
 
@@ -42,6 +40,9 @@ def route(text: str):
   {{"type":"app|web","name":"..."}}
 ]
 
+3) VISION:
+{{"type":"vision_action","task":"..."}}
+
 ПРАВИЛА:
 - только JSON
 - без текста
@@ -50,12 +51,11 @@ def route(text: str):
 КОМАНДА:
 {text}
 """
-
     return brain.ask(prompt)
 
 
 # =====================
-# LOOP
+# MAIN LOOP
 # =====================
 
 while True:
@@ -113,20 +113,14 @@ while True:
 
                 speaker.speak("Смотрю экран", "assistant")
 
-                img = take_screenshot()
-                vision = analyze_screen(img, task)
+                execute_vision_plan({
+                    "action": "search",
+                    "text": task.replace("найди", "").strip()
+                })
 
-                print("[VISION]", vision)
-
-                execute_vision_plan(vision)
-
-                speaker.speak("Сделал через экран", "assistant")
+                speaker.speak("Готово", "assistant")
                 continue
 
-            speaker.speak("Ошибка интерпретации", "warning")
-
         except Exception as e:
+            speaker.speak("Ошибка в обработке команды", "error")
             print("ERROR:", e)
-            speaker.speak("Ошибка системы", "error")
-
-        time.sleep(0.05)

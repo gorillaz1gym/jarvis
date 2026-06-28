@@ -39,6 +39,12 @@ class Brain:
 [
   {"type":"app|web","name":"..."}
 ]
+3) VISION:
+
+{
+  "type":"vision_action",
+  "task":"..."
+}
 
 ПРАВИЛА:
 - если сомнение → CHAT
