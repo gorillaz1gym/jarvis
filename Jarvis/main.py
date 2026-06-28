@@ -1,5 +1,4 @@
 import time
-import json
 
 from voice.listener import listen
 from voice.speaker import Speaker
@@ -7,6 +6,10 @@ from voice.wake_word import wait_for_wake_word
 
 from core.brain import Brain
 import control.windows as windows
+
+from vision.screen import take_screenshot
+from vision.vision_ai import analyze_screen
+from control.vision_executor import execute_vision_plan
 
 
 # =====================
@@ -22,55 +25,33 @@ print("🚀 SYSTEM READY")
 
 
 # =====================
-# 🧠 SMART ROUTER
+# 🧠 ROUTER
 # =====================
 def route(text: str):
 
     prompt = f"""
 Ты AI-роутер Jarvis.
 
-Твоя задача:
-определить это команда или разговор.
+Определи режим:
 
-ДОСТУПНЫЕ РЕЖИМЫ:
+1) CHAT:
+{{"type":"chat","text":"..." }}
 
-1) ACTION (если команда):
+2) ACTION:
 [
-  {{"type": "app|web", "name": "..."}}
+  {{"type":"app|web","name":"..."}}
 ]
 
-2) CHAT (если разговор):
-{{
-  "type": "chat",
-  "text": "ответ пользователю"
-}}
-
 ПРАВИЛА:
-- всегда отвечай JSON
+- только JSON
+- без текста
 - без объяснений
-- без текста вне JSON
-
-ПРИМЕРЫ:
-
-вход: привет
-выход: {{"type":"chat","text":"Привет!"}}
-
-вход: как дела
-выход: {{"type":"chat","text":"Всё отлично, я готов."}}
-
-вход: открой браузер
-выход: [{{"type":"app","name":"opera gx"}}]
-
-вход: включи музыку
-выход: [{{"type":"app","name":"yandex music"}}]
 
 КОМАНДА:
 {text}
 """
 
-    res = brain.ask(prompt)
-
-    return res
+    return brain.ask(prompt)
 
 
 # =====================
@@ -102,12 +83,16 @@ while True:
         try:
             result = route(text)
 
-            # 🧠 CHAT MODE
+            # =====================
+            # 💬 CHAT MODE
+            # =====================
             if isinstance(result, dict) and result.get("type") == "chat":
                 speaker.speak(result.get("text", ""), "assistant")
                 continue
 
+            # =====================
             # ⚙️ ACTION MODE
+            # =====================
             if isinstance(result, list):
                 if len(result) == 0:
                     speaker.speak("Не понял команду", "warning")
@@ -117,6 +102,25 @@ while True:
                     windows.execute(action)
 
                 speaker.speak("Готово", "assistant")
+                continue
+
+            # =====================
+            # 👁 VISION MODE
+            # =====================
+            if isinstance(result, dict) and result.get("type") == "vision_action":
+
+                task = result.get("task", "")
+
+                speaker.speak("Смотрю экран", "assistant")
+
+                img = take_screenshot()
+                vision = analyze_screen(img, task)
+
+                print("[VISION]", vision)
+
+                execute_vision_plan(vision)
+
+                speaker.speak("Сделал через экран", "assistant")
                 continue
 
             speaker.speak("Ошибка интерпретации", "warning")

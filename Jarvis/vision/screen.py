@@ -1,6 +1,6 @@
 import pyautogui
 
-def take_screenshot():
+def take_screenshot(path="screen.png"):
     img = pyautogui.screenshot()
-    img.save("screen.png")
-    return "screen.png"
+    img.save(path)
+    return path
