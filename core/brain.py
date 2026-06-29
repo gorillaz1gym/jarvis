@@ -1,6 +1,4 @@
-import json
 from openai import OpenAI
-
 
 client = OpenAI(
     base_url="http://localhost:11434/v1",
@@ -10,141 +8,45 @@ client = OpenAI(
 
 class Brain:
 
-    def ask(self, user_text: str, screen_state: str = None):
+    def ask(self, user_text, context=""):
 
-        if not screen_state:
-            screen_state = "SCREEN NOT AVAILABLE"
+        system = """
+Ты JARVIS AI.
 
-        system_prompt = """
-Ты JARVIS.
+ОТВЕЧАЙ ТОЛЬКО JSON:
 
-Отвечай ТОЛЬКО валидным JSON.
-
-Форматы:
-
-CHAT:
-{"type":"chat","text":"..."}
-
-ACTION:
 {
-  "type":"action",
-  "actions":[
-    {
-      "type":"open|close|minimize|maximize|focus",
-      "name":"..."
-    }
-  ]
+  "type": "chat | action",
+  "text": "",
+  "actions": [{"type":"open","name":"browser"}]
 }
 
-VISION:
-{
-  "type":"vision",
-  "task":"..."
-}
-
-Правила:
-
-- только JSON
-- никакого markdown
-- никаких пояснений
-- никаких мыслей
-- если не уверен → CHAT
-- если пользователь хочет открыть программу или сайт → ACTION
-- если нужно понять содержимое экрана → VISION
+ПРАВИЛА:
+- без текста вне JSON
+- если команда → action
+- иначе → chat
 """
 
         messages = [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            {
-                "role": "user",
-                "content":
-                    f"USER: {user_text}\n"
-                    f"SCREEN: {screen_state}"
-            }
+            {"role": "system", "content": system},
         ]
 
-        try:
-            res = client.chat.completions.create(
-                model="qwen3:8b",
-                messages=messages,
-                temperature=0.1,
-                max_tokens=150
-            )
+        if context:
+            messages.append({"role": "system", "content": f"MEMORY:\n{context}"})
 
-            raw = res.choices[0].message.content.strip()
+        messages.append({"role": "user", "content": user_text})
 
-            print("🧠 RAW:", raw)
-
-            parsed = self._safe_parse(raw)
-
-            return self._normalize(parsed)
-
-        except Exception as e:
-            print("[BRAIN ERROR]", e)
-
-            return {
-                "type": "chat",
-                "text": "brain offline"
-            }
-
-    def _safe_parse(self, text: str):
-
-        text = (
-            text
-            .replace("```json", "")
-            .replace("```", "")
-            .strip()
+        res = client.chat.completions.create(
+            model="qwen3:8b",
+            messages=messages,
+            max_tokens=80,
+            temperature=0.2,
         )
 
+        text = res.choices[0].message.content.strip()
+
         try:
+            import json
             return json.loads(text)
-
-        except Exception:
-            return {
-                "type": "chat",
-                "text": text
-            }
-
-    def _normalize(self, data):
-
-        if isinstance(data, list):
-            return {
-                "type": "action",
-                "actions": data
-            }
-
-        if not isinstance(data, dict):
-            return {
-                "type": "chat",
-                "text": "invalid format"
-            }
-
-        t = str(
-            data.get("type", "")
-        ).lower()
-
-        if t == "chat":
-            return {
-                "type": "chat",
-                "text": data.get("text", "")
-            }
-
-        if t == "action":
-            return {
-                "type": "action",
-                "actions": data.get("actions", [])
-            }
-
-        if t == "vision":
-            return {
-                "type": "vision",
-                "task": data.get("task", "")
-            }
-
-        return {
-            "type": "chat",
-            "text": "invalid format"
-        }
+        except:
+            return {"type": "chat", "text": text}

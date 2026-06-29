@@ -4,47 +4,45 @@ import time
 recognizer = sr.Recognizer()
 mic = sr.Microphone()
 
-_last = ""
+# стабильность
+recognizer.dynamic_energy_threshold = False
+recognizer.pause_threshold = 0.6
+
+_last_text = ""
 _last_time = 0
 
-recognizer.dynamic_energy_threshold = True
-recognizer.pause_threshold = 0.8
-
+# калибровка шума ОДИН раз
 with mic as source:
-    recognizer.adjust_for_ambient_noise(source, duration=1)
+    recognizer.adjust_for_ambient_noise(source, duration=0.5)
 
 
 def listen(speaker=None):
-    global _last, _last_time
+    global _last_text, _last_time
 
     try:
         with mic as source:
-            print("🎤 Слушаю...")
-
-            audio = recognizer.listen(
-                source,
-                timeout=5,
-                phrase_time_limit=6
-            )
+            print("🎤 listen...")
+            audio = recognizer.listen(source, timeout=5, phrase_time_limit=6)
 
         text = recognizer.recognize_google(audio, language="ru-RU")
         text = text.lower().strip()
 
-        print("👤 Ты:", text)
-
-        # 🔥 анти-дубль (работает нормально)
-        now = time.time()
-
-        if text == _last and (now - _last_time) < 1.5:
+        if not text:
             return ""
 
-        _last = text
-        _last_time = now
-
-        # 🔥 защита от самоговорения
+        # 🔥 не слушаем себя
         if speaker and getattr(speaker, "is_speaking", False):
             return ""
 
+        # 🔥 анти-дубль
+        now = time.time()
+        if text == _last_text and (now - _last_time) < 1.5:
+            return ""
+
+        _last_text = text
+        _last_time = now
+
+        print("👤 USER:", text)
         return text
 
     except sr.WaitTimeoutError:
@@ -54,9 +52,6 @@ def listen(speaker=None):
         return ""
 
     except sr.RequestError:
-        return ""
-
-    except OSError:
         return ""
 
     except Exception as e:
