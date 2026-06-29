@@ -11,71 +11,79 @@ class Speaker:
     def __init__(self):
         self.q = queue.Queue()
         self.running = True
+        self.is_speaking = False
 
         self.voice = "ru-RU-DmitryNeural"
 
-        self.thread = threading.Thread(target=self._worker, daemon=True)
+        self.thread = threading.Thread(
+            target=self._worker,
+            daemon=True
+        )
         self.thread.start()
 
         print("🔊 JARVIS Voice Engine активирован")
 
-    # -------------------------
-    # PUBLIC SPEAK METHOD
-    # -------------------------
-    def speak(self, text: str, emotion: str = "assistant"):
+    def speak(self, text: str, emotion="assistant"):
+
+        if not text:
+            return
+
+        text = str(text).strip()
+
+        if not text:
+            return
+
         styled_text = self._apply_emotion(text, emotion)
         self.q.put((styled_text, emotion))
 
-    # -------------------------
-    # EMOTION ENGINE
-    # -------------------------
-    def _apply_emotion(self, text: str, emotion: str):
-        text = text.strip()
+    def _apply_emotion(self, text, emotion):
 
         if emotion == "system":
-            return f"[системный режим] {text}"
+            return text
 
-        elif emotion == "warning":
+        if emotion == "warning":
             return f"Внимание. {text}"
 
-        elif emotion == "success":
+        if emotion == "success":
             return f"Готово. {text}"
-
-        elif emotion == "assistant":
-            return text
 
         return text
 
-    # -------------------------
-    # WORKER THREAD
-    # -------------------------
     def _worker(self):
         while self.running:
             try:
                 text, emotion = self.q.get(timeout=0.1)
 
-                print(f"🗣️ ({emotion}) Jarvis:", text)
+                print(f"🤖 Jarvis: {text}")
 
+                self.is_speaking = True
                 asyncio.run(self._speak(text))
+                self.is_speaking = False
 
             except queue.Empty:
                 continue
 
             except Exception as e:
+                self.is_speaking = False
                 print("SPEAKER ERROR:", e)
 
-    # -------------------------
-    # EDGE TTS ENGINE
-    # -------------------------
     async def _speak(self, text):
+
         temp_file = tempfile.mktemp(suffix=".mp3")
 
-        communicate = edge_tts.Communicate(text, self.voice)
-        await communicate.save(temp_file)
-
-        playsound(temp_file)
-
         try:
-            os.remove(temp_file)
-        except:
-            pass
+            communicate = edge_tts.Communicate(
+                text,
+                self.voice
+            )
+
+            await communicate.save(temp_file)
+
+            playsound(temp_file)
+
+        finally:
+            try:
+                if os.path.exists(temp_file):
+                    os.remove(temp_file)
+            except:
+                pass

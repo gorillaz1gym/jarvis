@@ -1,126 +1,74 @@
 import time
-
 from voice.listener import listen
 from voice.speaker import Speaker
-from voice.wake_word import wait_for_wake_word
-
 from core.brain import Brain
-import control.windows as windows
-
-from vision.vision_executor import execute_vision_plan
-
-
-# =====================
-# INIT
-# =====================
 
 speaker = Speaker()
 brain = Brain()
 
-speaker.speak("JARVIS запущен", "system")
+print("🚀 JARVIS READY")
 
-print("🚀 SYSTEM READY")
-
-
-# =====================
-# ROUTER
-# =====================
-
-def route(text: str):
-    prompt = f"""
-Ты AI-роутер Jarvis.
-
-Определи режим:
-
-1) CHAT:
-{{"type":"chat","text":"..." }}
-
-2) ACTION:
-[
-  {{"type":"app|web","name":"..."}}
-]
-
-3) VISION:
-{{"type":"vision_action","task":"..."}}
-
-ПРАВИЛА:
-- только JSON
-- без текста
-- без объяснений
-
-КОМАНДА:
-{text}
-"""
-    return brain.ask(prompt)
-
-
-# =====================
-# MAIN LOOP
-# =====================
+last_text = None
+processing = False
 
 while True:
 
-    print("👂 waiting wake word...")
-
-    if not wait_for_wake_word():
+    if processing:
+        time.sleep(0.1)
         continue
 
-    speaker.speak("Да, слушаю", "assistant")
+    text = listen(speaker)
 
-    while True:
+    if not text:
+        continue
 
-        text = listen(speaker)
+    text = text.strip().lower()
 
-        if not text:
+    # анти-дубль
+    if text == last_text:
+        continue
+
+    last_text = text
+
+    print(f"👤 Ты: {text}")
+
+    processing = True
+
+    try:
+        result = brain.ask(text)
+
+        print("🧠 RAW:", result)
+
+        if not isinstance(result, dict):
+            processing = False
             continue
 
-        text = text.lower().strip()
+        t = result.get("type")
 
-        if "спать" in text:
-            speaker.speak("Отключаюсь", "warning")
-            break
+        if t == "chat":
+            msg = result.get("text", "")
 
-        try:
-            result = route(text)
+            # защита от сломанного JSON в строке
+            if isinstance(msg, str):
+                if msg.strip().startswith("{"):
+                    try:
+                        import json
+                        msg = json.loads(msg).get("text", msg)
+                    except:
+                        pass
 
-            # =====================
-            # 💬 CHAT MODE
-            # =====================
-            if isinstance(result, dict) and result.get("type") == "chat":
-                speaker.speak(result.get("text", ""), "assistant")
-                continue
+            if msg:
+                speaker.speak(msg, "assistant")
 
-            # =====================
-            # ⚙️ ACTION MODE
-            # =====================
-            if isinstance(result, list):
-                if len(result) == 0:
-                    speaker.speak("Не понял команду", "warning")
-                    continue
+        elif t == "action":
+            speaker.speak("выполняю команду", "assistant")
 
-                for action in result:
-                    windows.execute(action)
+        else:
+            speaker.speak("не понял", "assistant")
 
-                speaker.speak("Готово", "assistant")
-                continue
+    except Exception as e:
+        print("ERROR:", e)
+        speaker.speak("ошибка", "assistant")
 
-            # =====================
-            # 👁 VISION MODE
-            # =====================
-            if isinstance(result, dict) and result.get("type") == "vision_action":
-
-                task = result.get("task", "")
-
-                speaker.speak("Смотрю экран", "assistant")
-
-                execute_vision_plan({
-                    "action": "search",
-                    "text": task.replace("найди", "").strip()
-                })
-
-                speaker.speak("Готово", "assistant")
-                continue
-
-        except Exception as e:
-            speaker.speak("Ошибка в обработке команды", "error")
-            print("ERROR:", e)
+    processing = False
+    time.sleep(0.2)

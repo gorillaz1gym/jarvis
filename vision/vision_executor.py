@@ -1,6 +1,5 @@
 import pyautogui
 import time
-
 from vision.ocr import find_text
 
 
@@ -13,12 +12,7 @@ def click_text(text):
 
     x, y = pos
 
-    pyautogui.moveTo(
-        x,
-        y,
-        duration=0.2
-    )
-
+    pyautogui.moveTo(x, y, duration=0.2)
     pyautogui.click()
 
     return True
@@ -26,17 +20,12 @@ def click_text(text):
 
 def search_text(text):
 
-    if not click_text("поиск"):
-        if not click_text("search"):
-            return False
+    if not click_text("поиск") and not click_text("search"):
+        return False
 
     time.sleep(0.5)
 
-    pyautogui.write(
-        text,
-        interval=0.03
-    )
-
+    pyautogui.write(text, interval=0.03)
     pyautogui.press("enter")
 
     return True
@@ -45,12 +34,14 @@ def search_text(text):
 def execute_vision_plan(plan):
 
     if not isinstance(plan, dict):
-        return
+        return False
 
     action = plan.get("action")
 
     if action == "click_text":
-        click_text(plan.get("text", ""))
+        return click_text(plan.get("text", ""))
 
-    elif action == "search":
-        search_text(plan.get("text", ""))
+    if action == "search":
+        return search_text(plan.get("text", ""))
+
+    return False

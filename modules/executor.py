@@ -1,24 +1,135 @@
-import webbrowser
-import subprocess
-import datetime
+import time
+import pyautogui
+import pygetwindow as gw
 
 
-def execute(action):
-    if action == "open_browser":
-        webbrowser.open("https://google.com")
-        return "Открываю браузер"
+# =========================
+# 🔍 WINDOW FINDER
+# =========================
+def find_window(name: str):
+    name = name.lower()
 
-    elif action == "open_steam":
-        subprocess.Popen(
-            r"C:\Program Files (x86)\Steam\Steam.exe"
-        )
-        return "Открываю Steam"
+    for w in gw.getAllWindows():
+        if w.title and name in w.title.lower():
+            return w
 
-    elif action == "time":
-        current_time = datetime.datetime.now().strftime("%H:%M")
-        return f"Сейчас {current_time}"
+    return None
 
-    elif action == "weather":
-        return "Модуль погоды пока не подключен"
 
-    return "Я пока не умею выполнять эту команду"
+# =========================
+# 🚀 FALLBACK OPEN
+# =========================
+def fallback_open(name: str):
+
+    # открыть поиск Windows
+    pyautogui.hotkey("win", "s")
+    time.sleep(0.8)
+
+    # очистить строку
+    pyautogui.hotkey("ctrl", "a")
+    pyautogui.press("backspace")
+
+    time.sleep(0.2)
+
+    # ввести название
+    pyautogui.write(name, interval=0.05)
+
+    time.sleep(0.6)
+
+    # открыть результат
+    pyautogui.press("enter")
+
+
+# =========================
+# ⚙️ MAIN EXECUTOR
+# =========================
+def execute(action: dict):
+
+    if not isinstance(action, dict):
+        return "fail"
+
+    t = action.get("type", "")
+    name_raw = action.get("name", "")
+
+    if not name_raw:
+        return "fail"
+
+    name = name_raw.lower()
+
+    # нормализация названий
+    aliases = {
+        "browser": "chrome",
+        "google": "chrome",
+        "музыка": "яндекс музыка",
+        "music": "spotify"
+    }
+
+    name = aliases.get(name, name)
+
+    w = find_window(name)
+
+    # =====================
+    # OPEN
+    # =====================
+    if t == "open":
+
+        if w:
+            try:
+                w.activate()
+                return "ok"
+            except:
+                fallback_open(name)
+                return "fallback_used"
+        else:
+            fallback_open(name)
+            return "fallback_used"
+
+    # =====================
+    # CLOSE
+    # =====================
+    elif t == "close":
+        if w:
+            try:
+                w.close()
+                return "ok"
+            except:
+                return "fail"
+        return "fail"
+
+    # =====================
+    # MINIMIZE
+    # =====================
+    elif t == "minimize":
+        if w:
+            try:
+                w.minimize()
+                return "ok"
+            except:
+                return "fail"
+        return "fail"
+
+    # =====================
+    # MAXIMIZE
+    # =====================
+    elif t == "maximize":
+        if w:
+            try:
+                w.maximize()
+                return "ok"
+            except:
+                return "fail"
+        return "fail"
+
+    # =====================
+    # FOCUS
+    # =====================
+    elif t == "focus":
+        if w:
+            try:
+                w.activate()
+                return "ok"
+            except:
+                return "fail"
+        return "fail"
+
+    return "fail"

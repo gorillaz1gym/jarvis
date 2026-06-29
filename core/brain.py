@@ -1,99 +1,150 @@
-import os
 import json
 from openai import OpenAI
-from dotenv import load_dotenv
 
-load_dotenv()
-
-API_KEY = os.getenv("OPENROUTER_API_KEY")
 
 client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=API_KEY
+    base_url="http://localhost:11434/v1",
+    api_key="ollama"
 )
-
-MODELS = [
-    "openai/gpt-4o-mini",
-    "anthropic/claude-3-haiku",
-]
 
 
 class Brain:
 
-    def ask(self, text: str):
+    def ask(self, user_text: str, screen_state: str = None):
+
+        if not screen_state:
+            screen_state = "SCREEN NOT AVAILABLE"
+
+        system_prompt = """
+Ты JARVIS.
+
+Отвечай ТОЛЬКО валидным JSON.
+
+Форматы:
+
+CHAT:
+{"type":"chat","text":"..."}
+
+ACTION:
+{
+  "type":"action",
+  "actions":[
+    {
+      "type":"open|close|minimize|maximize|focus",
+      "name":"..."
+    }
+  ]
+}
+
+VISION:
+{
+  "type":"vision",
+  "task":"..."
+}
+
+Правила:
+
+- только JSON
+- никакого markdown
+- никаких пояснений
+- никаких мыслей
+- если не уверен → CHAT
+- если пользователь хочет открыть программу или сайт → ACTION
+- если нужно понять содержимое экрана → VISION
+"""
 
         messages = [
             {
                 "role": "system",
-                "content": """
-Ты — Jarvis.
-
-Ты можешь работать в 2 режимах:
-
-1) CHAT:
-если это разговор → ответ:
-{"type":"chat","text":"..."}
-
-2) ACTION:
-если это команда → ответ:
-[
-  {"type":"app|web","name":"..."}
-]
-3) VISION:
-
-{
-  "type":"vision_action",
-  "task":"..."
-}
-
-ПРАВИЛА:
-- если сомнение → CHAT
-- не ломай JSON
-- не пиши объяснений
-"""
+                "content": system_prompt
             },
-            {"role": "user", "content": text}
+            {
+                "role": "user",
+                "content":
+                    f"USER: {user_text}\n"
+                    f"SCREEN: {screen_state}"
+            }
         ]
 
-        for model in MODELS:
-            try:
-                res = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    temperature=0.3
-                )
+        try:
+            res = client.chat.completions.create(
+                model="qwen3:8b",
+                messages=messages,
+                temperature=0.1,
+                max_tokens=150
+            )
 
-                content = res.choices[0].message.content.strip()
+            raw = res.choices[0].message.content.strip()
 
-                return self._safe_parse(content)
+            print("🧠 RAW:", raw)
 
-            except Exception as e:
-                print("[BRAIN FAIL]", model, e)
+            parsed = self._safe_parse(raw)
 
-        return {"type": "chat", "text": "Brain offline"}
+            return self._normalize(parsed)
 
+        except Exception as e:
+            print("[BRAIN ERROR]", e)
+
+            return {
+                "type": "chat",
+                "text": "brain offline"
+            }
 
     def _safe_parse(self, text: str):
 
+        text = (
+            text
+            .replace("```json", "")
+            .replace("```", "")
+            .strip()
+        )
+
         try:
             return json.loads(text)
-        except:
-            pass
 
-        text = text.replace("```json", "").replace("```", "").strip()
+        except Exception:
+            return {
+                "type": "chat",
+                "text": text
+            }
 
-        try:
-            return json.loads(text)
-        except:
-            pass
+    def _normalize(self, data):
 
-        start = text.find("[")
-        end = text.rfind("]")
+        if isinstance(data, list):
+            return {
+                "type": "action",
+                "actions": data
+            }
 
-        if start != -1 and end != -1:
-            try:
-                return json.loads(text[start:end+1])
-            except:
-                pass
+        if not isinstance(data, dict):
+            return {
+                "type": "chat",
+                "text": "invalid format"
+            }
 
-        return {"type": "chat", "text": text}
+        t = str(
+            data.get("type", "")
+        ).lower()
+
+        if t == "chat":
+            return {
+                "type": "chat",
+                "text": data.get("text", "")
+            }
+
+        if t == "action":
+            return {
+                "type": "action",
+                "actions": data.get("actions", [])
+            }
+
+        if t == "vision":
+            return {
+                "type": "vision",
+                "task": data.get("task", "")
+            }
+
+        return {
+            "type": "chat",
+            "text": "invalid format"
+        }

@@ -1,76 +1,98 @@
-import os
-import webbrowser
+import time
+import pyautogui
+import pygetwindow as gw
 
 
-# =========================
-# 🌐 WEB APPS
-# =========================
-WEB_APPS = {
-    "youtube": "https://youtube.com",
-    "google": "https://google.com",
-    "chatgpt": "https://chat.openai.com",
-    "instagram": "https://instagram.com",
-    "tiktok": "https://tiktok.com",
-    "music": "https://music.yandex.ru"
-}
+def find_window(name: str):
+    import pygetwindow as gw
+
+    name = name.lower()
+
+    for w in gw.getAllWindows():
+        if w.title and name in w.title.lower():
+            return w
+
+    # 🔥 fallback: более агрессивный поиск
+    for w in gw.getAllWindows():
+        if w.title:
+            if any(part in w.title.lower() for part in name.split()):
+                return w
+
+    return None
 
 
-# =========================
-# 🚀 EXECUTOR
-# =========================
+def fallback_open(name: str):
+    pyautogui.hotkey("win", "s")
+    time.sleep(0.7)
+
+    pyautogui.write(name, interval=0.05)
+    time.sleep(0.6)
+
+    pyautogui.press("enter")
+
+    return "opened"
+
+
+def force_focus(window):
+    try:
+        window.restore()
+        time.sleep(0.2)
+        window.activate()
+        return True
+    except:
+        return False
+
+
 def execute(action: dict):
 
-    t = action.get("type")
-    name = action.get("name", "").lower().strip()
+    if not isinstance(action, dict):
+        return "fail"
 
-    # 🌐 WEB
-    if t == "web":
-        url = WEB_APPS.get(name, f"https://{name}.com")
-        print(f"[WINDOWS] opening web: {url}")
-        webbrowser.open(url)
-        return True
+    t = action.get("type", "").lower()
+    name = action.get("name", "").lower()
 
-    # 💻 APP
-    if t == "app":
+    if not t or not name:
+        return "fail"
 
-        print(f"[WINDOWS] launching app: {name}")
+    aliases = {
+        "browser": "chrome",
+        "google": "chrome",
+        "музыка": "spotify",
+        "music": "spotify"
+    }
 
-        # 🎯 OPERA GX (твой браузер)
-        if "opera" in name:
-            paths = [
-                r"C:\Program Files\Opera GX\launcher.exe",
-                r"C:\Users\%USERNAME%\AppData\Local\Programs\Opera GX\launcher.exe"
-            ]
+    name = aliases.get(name, name)
 
-            for p in paths:
-                p = os.path.expandvars(p)
-                if os.path.exists(p):
-                    os.startfile(p)
-                    return True
+    w = find_window(name)
 
-            os.system("start opera gx")
-            return True
+    if t == "open":
+        if w:
+            if force_focus(w):
+                return "ok"
+        return fallback_open(name)
 
-        # 🎯 YANDEX MUSIC
-        if "yandex" in name or "music" in name:
-            paths = [
-                r"C:\Users\%USERNAME%\AppData\Local\Programs\YandexMusic\Яндекс Музыка.exe",
-                r"C:\Program Files\Yandex Music\YandexMusic.exe"
-            ]
+    if t == "close":
+        if w:
+            w.close()
+            return "ok"
+        return "fail"
 
-            for p in paths:
-                p = os.path.expandvars(p)
-                if os.path.exists(p):
-                    os.startfile(p)
-                    return True
+    if t == "minimize":
+        if w:
+            w.minimize()
+            return "ok"
+        return "fail"
 
-            webbrowser.open("https://music.yandex.ru")
-            return True
+    if t == "maximize":
+        if w:
+            w.maximize()
+            return "ok"
+        return "fail"
 
-        # 🎯 DEFAULT WINDOWS LAUNCH
-        try:
-            os.system(f'start "" "{name}"')
-            return True
-        except:
-            print(f"[WINDOWS] failed: {name}")
-            return False
+    if t == "focus":
+        if w:
+            if force_focus(w):
+                return "ok"
+        return "fail"
+
+    return "fail"
